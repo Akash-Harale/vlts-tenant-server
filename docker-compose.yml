@@ -1,0 +1,11 @@
+version: "3.8"
+
+services:
+  app:
+    container_name: vlts-tenant-server
+    build: .
+    ports:
+      - "5000:3006"
+    env_file:
+      - .env
+    restart: unless-stopped
