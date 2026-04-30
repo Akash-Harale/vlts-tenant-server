@@ -62,13 +62,13 @@ app.use('/api/gps-allocations',  gpsAllocationRoutes);
 app.use('/api/assignments/gps-vehicle', vehicleDeviceMapRoutes);
 
 // Tenant User Management (manager, helpdesk, executive, etc.)
-app.use('/api/users', tenantUserRoutes);
+app.use('/api/user', tenantUserRoutes);
 
 // Tenant Client Management (client companies onboarded by tenant)
 app.use('/api/clients', tenantClientRoutes);
 
 // Vehicle CRUD — mounted LAST at /api to avoid swallowing other /api/* routes
-app.use('/api', vehicleRoutes);
+app.use('/api/vehicle', vehicleRoutes);
 
 // ─── Health check ────────────────────────────
 app.get('/health', (req, res) => {

@@ -6,19 +6,23 @@ const router = express.Router();
 const vehicleController = require('../controllers/vehicleController');
 const authMiddleware = require('../middleware/authMiddleware');
 
-// POST   /api/vehicles          → Register a new vehicle (against a client)
-router.post('/vehicles', authMiddleware(['create_vehicle']), vehicleController.registerVehicle);
+// POST   /api/vehicle/              → Register a new vehicle (against a client)
+router.post('/', authMiddleware(['create_vehicle']), vehicleController.registerVehicle);
 
-// GET    /api/vehicles          → List all vehicles
-router.get('/vehicles', authMiddleware(['read_vehicle']), vehicleController.getVehicles);
+// GET    /api/vehicle/              → List ALL vehicles
+router.get('/', authMiddleware(['read_vehicle']), vehicleController.getVehicles);
 
-// GET    /api/vehicle?vehicle_id=<id> OR ?registration_number=<reg>
-router.get('/vehicle', authMiddleware(['read_vehicle']), vehicleController.getVehicleById);
+// GET    /api/vehicle/client/:client_id  → All vehicles for a specific client
+// IMPORTANT: must be BEFORE /:id so the literal "client" segment is matched first
+router.get('/client/:client_id', authMiddleware(['read_vehicle']), vehicleController.getVehiclesByClient);
 
-// PUT    /api/vehicles/:id      → Update vehicle
-router.put('/vehicles/:id', authMiddleware(['update_vehicle']), vehicleController.updateVehicle);
+// GET    /api/vehicle/:id           → Single vehicle by its MongoDB _id
+router.get('/:id', authMiddleware(['read_vehicle']), vehicleController.getVehicleById);
 
-// DELETE /api/vehicles/:id      → Delete vehicle
-router.delete('/vehicles/:id', authMiddleware(['delete_vehicle']), vehicleController.deleteVehicle);
+// PUT    /api/vehicle/:id           → Update vehicle
+router.put('/:id', authMiddleware(['update_vehicle']), vehicleController.updateVehicle);
+
+// DELETE /api/vehicle/:id           → Delete vehicle
+router.delete('/:id', authMiddleware(['delete_vehicle']), vehicleController.deleteVehicle);
 
 module.exports = router;

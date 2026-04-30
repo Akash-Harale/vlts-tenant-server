@@ -118,33 +118,45 @@ exports.registerVehicle = async (req, res) => {
 };
 
 // ─────────────────────────────────────────────
-// GET /api/vehicles → List all vehicles with state
+// GET /api/vehicle  → List ALL vehicles for this tenant
 // ─────────────────────────────────────────────
 exports.getVehicles = async (req, res) => {
   try {
-    const states = await VehicleState.find().populate('vehicle_id');
-    const result = states.map(vs => ({
-      vehicleId: vs?.vehicle_id?._id,
-      client_id: vs?.vehicle_id?.client_id,
-      registration_number: vs?.vehicle_id?.registration_number,
-      make: vs?.vehicle_id?.make,
-      model: vs?.vehicle_id?.model,
-      manufacturing_year: vs?.vehicle_id?.manufacturing_year,
-      chassis_number: vs?.vehicle_id?.chassis_number,
-      engine_number: vs?.vehicle_id?.engine_number,
-      date_of_subscription: vs?.vehicle_id?.date_of_subscription,
-      regn_valid_upto: vs?.vehicle_id?.regn_valid_upto,
-      place_of_availability: vs?.place_of_availability,
-      next_available_date: vs?.next_available_date,
-      status: vs?.status
-    }));
+    // Vehicles are linked to clients; clients are linked to tenants.
+    // The simplest correct join: fetch all vehicles then populate state.
+    // NOTE: VehicleState has no client_id/tenant_id — those live on Vehicle.
+    const vehicles = await Vehicle.find().lean();
+
+    // Bulk-fetch all states and index them by vehicle_id string
+    const vehicleIds = vehicles.map(v => v._id);
+    const states = await VehicleState.find({ vehicle_id: { $in: vehicleIds } }).lean();
+    const stateMap = Object.fromEntries(states.map(s => [s.vehicle_id.toString(), s]));
+
+    const result = vehicles.map(v => {
+      const vs = stateMap[v._id.toString()] || {};
+      return {
+        vehicleId: v._id,
+        client_id: v.client_id,
+        registration_number: v.registration_number,
+        make: v.make,
+        model: v.model,
+        manufacturing_year: v.manufacturing_year,
+        chassis_number: v.chassis_number,
+        engine_number: v.engine_number,
+        date_of_subscription: v.date_of_subscription,
+        regn_valid_upto: v.regn_valid_upto,
+        place_of_availability: vs.place_of_availability || null,
+        next_available_date: vs.next_available_date || null,
+        status: vs.status || null,
+      };
+    });
 
     await logger.audit(
       req.user?.employee_id || 'SYSTEM',
       req.user?.employee_id?.name || 'SYSTEM',
       req.user?.role || 'unknown',
       'read', 'vehicle',
-      `Fetched ${result.length} vehicles`,
+      `Fetched ${result.length} vehicles (all clients)`,
       'success', req.user?.tenant_id || null, null
     );
 
@@ -156,24 +168,90 @@ exports.getVehicles = async (req, res) => {
 };
 
 // ─────────────────────────────────────────────
-// GET /api/vehicle?vehicle_id=<id> OR ?registration_number=<reg>
+// GET /api/vehicle/client/:client_id
+//   List all vehicles for a specific client.
+//   Tenant-scoped: ensures the client belongs to req.user.tenant_id.
+// ─────────────────────────────────────────────
+
+// what is the complete api url for this 
+exports.getVehiclesByClient = async (req, res) => {
+  const { client_id } = req.params;
+  const tenant_id = req.user?.tenant_id;
+
+  if (!client_id) {
+    return res.status(400).json({ error: 'client_id param is required' });
+  }
+
+  try {
+    // Security: verify the client belongs to this tenant before returning data
+    const ClientProfile = require('../models/clientProfileModel'); // collection: client_profiles
+    const client = await ClientProfile.findOne({ _id: client_id, tenant_id }).lean();
+    if (!client) {
+      return res.status(404).json({ error: 'Client not found for this tenant' });
+    }
+
+    // Fetch all vehicles registered under this client
+    const vehicles = await Vehicle.find({ client_id }).lean();
+
+    if (vehicles.length === 0) {
+      return res.json([]);
+    }
+
+    // Enrich with vehicle state
+    const vehicleIds = vehicles.map(v => v._id);
+    const states = await VehicleState.find({ vehicle_id: { $in: vehicleIds } }).lean();
+    const stateMap = Object.fromEntries(states.map(s => [s.vehicle_id.toString(), s]));
+
+    const result = vehicles.map(v => {
+      const vs = stateMap[v._id.toString()] || {};
+      return {
+        vehicleId: v._id,
+        client_id: v.client_id,
+        registration_number: v.registration_number,
+        make: v.make,
+        model: v.model,
+        manufacturing_year: v.manufacturing_year,
+        chassis_number: v.chassis_number,
+        engine_number: v.engine_number,
+        date_of_subscription: v.date_of_subscription,
+        regn_valid_upto: v.regn_valid_upto,
+        place_of_availability: vs.place_of_availability || null,
+        next_available_date: vs.next_available_date || null,
+        status: vs.status || null,
+      };
+    });
+
+    await logger.audit(
+      req.user?.employee_id || 'SYSTEM',
+      req.user?.employee_id?.name || 'SYSTEM',
+      req.user?.role || 'unknown',
+      'read', 'vehicle',
+      `Fetched ${result.length} vehicles for client ${client_id}`,
+      'success', tenant_id || null, null
+    );
+
+    return res.json(result);
+  } catch (err) {
+    console.error('[vehicle] getVehiclesByClient error:', err.message);
+    return res.status(500).json({ error: err.message });
+  }
+};
+
+// ─────────────────────────────────────────────
+// GET /api/vehicle/:id  → Single vehicle by its MongoDB _id
 // ─────────────────────────────────────────────
 exports.getVehicleById = async (req, res) => {
   try {
-    const { vehicle_id, registration_number } = req.query;
+    const { id } = req.params;  // vehicle MongoDB _id from the URL path
 
-    let vehicle;
-    if (vehicle_id) {
-      vehicle = await Vehicle.findById(vehicle_id);
-    } else if (registration_number) {
-      vehicle = await Vehicle.findOne({ registration_number });
-    } else {
-      return res.status(400).json({ error: 'Provide either vehicle_id or registration_number' });
+    if (!id) {
+      return res.status(400).json({ error: 'vehicle id is required in the URL path' });
     }
 
+    const vehicle = await Vehicle.findById(id).lean();
     if (!vehicle) return res.status(404).json({ error: 'Vehicle not found' });
 
-    const vehicleState = await VehicleState.findOne({ vehicle_id: vehicle._id });
+    const vehicleState = await VehicleState.findOne({ vehicle_id: vehicle._id }).lean();
 
     return res.json({
       vehicleId: vehicle._id,
@@ -186,9 +264,9 @@ exports.getVehicleById = async (req, res) => {
       engine_number: vehicle.engine_number,
       date_of_subscription: vehicle.date_of_subscription,
       regn_valid_upto: vehicle.regn_valid_upto,
-      place_of_availability: vehicleState?.place_of_availability,
+      place_of_availability: vehicleState?.place_of_availability || null,
       next_available_date: vehicleState?.next_available_date || null,
-      status: vehicleState?.status
+      status: vehicleState?.status || null,
     });
   } catch (err) {
     console.error('[vehicle] getVehicleById error:', err.message);
