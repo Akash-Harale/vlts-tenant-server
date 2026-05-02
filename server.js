@@ -1,42 +1,45 @@
 // server.js
 // VLTS-Tenant API Server
 
-require('dotenv').config();
-const express = require('express');
-const cors = require('cors');
-const connectDB = require('./config/db');
+require("dotenv").config();
+const express = require("express");
+const cors = require("cors");
+const connectDB = require("./config/db");
 
 // ─── Route imports ───────────────────────────
-const authRoutes = require('./routes/authRoutes');
-const gpsDeviceRoutes = require('./routes/gpsDeviceRoutes');
-const vehicleRoutes = require('./routes/vehicleRoutes');
-const vehicleDeviceMapRoutes = require('./routes/vehicleDeviceMapRoutes');
-const gpsAllocationRoutes = require('./routes/gpsAllocationRoutes');
-const tenantUserRoutes = require('./routes/tenantUserRoutes');
-const tenantClientRoutes = require('./routes/tenantClientRoutes');
+const authRoutes = require("./routes/authRoutes");
+const gpsDeviceRoutes = require("./routes/gpsDeviceRoutes");
+const vehicleRoutes = require("./routes/vehicleRoutes");
+const vehicleDeviceMapRoutes = require("./routes/vehicleDeviceMapRoutes");
+const gpsAllocationRoutes = require("./routes/gpsAllocationRoutes");
+const tenantUserRoutes = require("./routes/tenantUserRoutes");
+const tenantClientRoutes = require("./routes/tenantClientRoutes");
+const roleRoutes = require("./routes/rolesRoutes");
 
 const app = express();
 
 // ─── CORS ────────────────────────────────────
 const allowedOrigins = process.env.CORS_ORIGIN
-  ? process.env.CORS_ORIGIN.split(',').map(o => o.trim())
-  : ['http://localhost:3000'];
+  ? process.env.CORS_ORIGIN.split(",").map((o) => o.trim())
+  : ["http://localhost:3000"];
 
-app.use(cors({
-  origin: (origin, callback) => {
-    // Allow Postman / curl (no origin header)
-    if (!origin) return callback(null, true);
-    if (allowedOrigins.includes(origin)) return callback(null, true);
-    console.error('[CORS] Blocked origin:', origin);
-    return callback(null, false); // ← return false, NOT an Error — avoids 500
-  },
-  methods: ['GET', 'POST', 'PUT', 'DELETE'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true
-}));
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      // Allow Postman / curl (no origin header)
+      if (!origin) return callback(null, true);
+      if (allowedOrigins.includes(origin)) return callback(null, true);
+      console.error("[CORS] Blocked origin:", origin);
+      return callback(null, false); // ← return false, NOT an Error — avoids 500
+    },
+    methods: ["GET", "POST", "PUT", "DELETE"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+    credentials: true,
+  }),
+);
 
 // ─── Body parser ─────────────────────────────
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({ limit: "10mb" }));
 
 // ─── Request logger (dev only) ───────────────
 app.use((req, res, next) => {
@@ -50,49 +53,53 @@ connectDB();
 // ─── Routes ──────────────────────────────────
 
 // Auth: Login, Logout, Refresh
-app.use('/api/auth/tenant', authRoutes);
+app.use("/api/auth/tenant", authRoutes);
 
 // GPS Device CRUD
-app.use('/api/gps', gpsDeviceRoutes);
+app.use("/api/gps", gpsDeviceRoutes);
 
 // GPS Allocation — assign GPS devices to Technician or Salesperson
-app.use('/api/gps-allocations',  gpsAllocationRoutes);
+app.use("/api/gps-allocations", gpsAllocationRoutes);
 
 // GPS-Vehicle Mapping: Allocate, Read, Update, Deallocate
-app.use('/api/assignments/gps-vehicle', vehicleDeviceMapRoutes);
+app.use("/api/assignments/gps-vehicle", vehicleDeviceMapRoutes);
 
 // Tenant User Management (manager, helpdesk, executive, etc.)
-app.use('/api/user', tenantUserRoutes);
+app.use("/api/user", tenantUserRoutes);
 
 // Tenant Client Management (client companies onboarded by tenant)
-app.use('/api/clients', tenantClientRoutes);
+app.use("/api/clients", tenantClientRoutes);
 
 // Vehicle CRUD — mounted LAST at /api to avoid swallowing other /api/* routes
-app.use('/api/vehicle', vehicleRoutes);
+app.use("/api/vehicle", vehicleRoutes);
+
+// Roles
+app.use("/api/roles", roleRoutes);
 
 // ─── Health check ────────────────────────────
-app.get('/health', (req, res) => {
+app.get("/health", (req, res) => {
   res.json({
-    status: 'OK',
-    service: 'vlts-tenant',
-    timestamp: new Date().toISOString()
+    status: "OK",
+    service: "vlts-tenant",
+    timestamp: new Date().toISOString(),
   });
 });
 
 // ─── Root ────────────────────────────────────
-app.get('/', (req, res) => {
+app.get("/", (req, res) => {
   res.json({
-    service: 'VLTS Tenant API',
-    version: '1.0.0',
+    service: "VLTS Tenant API",
+    version: "1.0.0",
     endpoints: {
-      auth: '/api/auth/tenant/login | /logout | /refresh',
-      gps_devices: '/api/gps  (CRUD)',
-      gps_allocations: '/api/gps-allocations  (allocate to technician/salesperson)',
-      vehicles: '/api/vehicles | /api/vehicle  (CRUD)',
-      gps_vehicle_mapping: '/api/assignments/gps-vehicle  (map GPS to vehicle)',
-      users: '/api/users  (tenant user CRUD — manager, helpdesk, etc.)',
-      clients: '/api/clients  (client company CRUD)'
-    }
+      auth: "/api/auth/tenant/login | /logout | /refresh",
+      gps_devices: "/api/gps  (CRUD)",
+      gps_allocations:
+        "/api/gps-allocations  (allocate to technician/salesperson)",
+      vehicles: "/api/vehicles | /api/vehicle  (CRUD)",
+      gps_vehicle_mapping: "/api/assignments/gps-vehicle  (map GPS to vehicle)",
+      users: "/api/users  (tenant user CRUD — manager, helpdesk, etc.)",
+      clients: "/api/clients  (client company CRUD)",
+    },
   });
 });
 
@@ -104,8 +111,8 @@ app.use((req, res) => {
 
 // ─── Global error handler ────────────────────
 app.use((err, req, res, next) => {
-  console.error('[server] Unhandled error:', err.message, err.stack);
-  res.status(500).json({ error: 'Internal server error', detail: err.message });
+  console.error("[server] Unhandled error:", err.message, err.stack);
+  res.status(500).json({ error: "Internal server error", detail: err.message });
 });
 
 // ─── Start server ────────────────────────────
