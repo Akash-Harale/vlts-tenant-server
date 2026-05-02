@@ -2,8 +2,9 @@ version: "3.8"
 
 services:
   app:
-    container_name: vlts-tenant-server
     build: .
+    image: vlts-tenant-server:v3
+    container_name: vlts-tenant-server
     ports:
       - "5000:3006"
     env_file:
