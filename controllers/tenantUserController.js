@@ -145,7 +145,7 @@ exports.getTenantUsers = async (req, res) => {
   const meta = getMeta(req);
   try {
 
-    const users = await User.find({ tenant_id: req.user.tenant_id, scope: 'tenant', role: { $ne: '69f07a3815ecfec8bb4fc4c4' } }) // also exculde this role - 69f07a3815ecfec8bb4fc4c4
+    const users = await User.find({ tenant_id: req.user.tenant_id, scope: 'tenant', role: { $ne: '69f5b8e4d62dbb85ed7b7eaa' } }) // also exculde this role - 69f07a3815ecfec8bb4fc4c4
       .populate('role', 'name privileges scope')
       .populate('employee_id', 'name email mobile_number designation');
 
